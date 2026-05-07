@@ -15,11 +15,11 @@ pub async fn signup(
 
     let mut user_store_write = user_store.write().await;
 
-    if let Ok(_) = user_store_write.get_user(&user.email) {
+    if let Ok(_) = user_store_write.get_user(&user.email).await {
         return Err(AuthAPIError::UserAlreadyExists);
     }
 
-    let _ = user_store_write.add_user(user).map_err(|_| AuthAPIError::UnexpectedError);
+    let _ = user_store_write.add_user(user).await.map_err(|_| AuthAPIError::UnexpectedError);
 
     let response = Json(SignupResponse {
         message: "User created successfully!".to_string(),

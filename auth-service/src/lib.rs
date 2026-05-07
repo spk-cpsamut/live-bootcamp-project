@@ -1,6 +1,12 @@
 use std::{collections::HashMap, error::Error, sync::Arc};
 
-use axum::{Json, Router, http::StatusCode, response::{IntoResponse, Response}, routing::post, serve::Serve};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::post,
+    serve::Serve,
+    Json, Router,
+};
 use serde::{Deserialize, Serialize};
 use tokio::{net::TcpListener, sync::RwLock};
 use tower_http::services::ServeDir;
@@ -18,10 +24,10 @@ pub mod app_state {
     use std::sync::Arc;
     use tokio::sync::RwLock;
 
-    use crate::services::hashmap_user_store::HashmapUserStore;
+    use crate::domain::UserStore;
 
     // Using a type alias to improve readability!
-    pub type UserStoreType = Arc<RwLock<HashmapUserStore>>;
+    pub type UserStoreType = Arc<RwLock<dyn UserStore>>;
 
     #[derive(Clone)]
     pub struct AppState {
@@ -37,7 +43,6 @@ pub mod app_state {
 
 use app_state::AppState;
 use domain::AuthAPIError;
-
 
 #[derive(Serialize, Deserialize)]
 pub struct ErrorResponse {
