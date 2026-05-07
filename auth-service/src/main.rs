@@ -1,9 +1,18 @@
-use axum::{response::Html};
-use auth_service::Application;
+use std::{collections::HashMap, sync::Arc};
+
+use auth_service::{app_state, services::hashmap_user_store::HashmapUserStore, Application};
+use axum::response::Html;
+use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() {
-    let app = Application::build("0.0.0.0:3000").await.expect("fail to build app");
+    let user_state = Arc::new(RwLock::new(HashmapUserStore {
+        email_map: HashMap::new(),
+    }));
+    let app_state = app_state::AppState::new(user_state);
+    let app = Application::build(app_state, "0.0.0.0:3000")
+        .await
+        .expect("fail to build app");
 
     app.run().await.expect("Failed to run app")
 }

@@ -1,4 +1,9 @@
-use auth_service::Application;
+use std::{collections::HashMap, sync::{Arc}};
+
+use auth_service::{Application, app_state, services::hashmap_user_store::HashmapUserStore};
+use serde;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 pub struct TestApp {
     pub address: String,
@@ -7,7 +12,12 @@ pub struct TestApp {
 
 impl TestApp {
     pub async fn new() -> Self {
-        let app = Application::build("127.0.0.1:0")
+        let user_state = Arc::new(RwLock::new(HashmapUserStore {
+            email_map: HashMap::new(),
+        }));
+        let app_state = app_state::AppState::new(user_state);
+
+        let app = Application::build(app_state, "127.0.0.1:0")
             .await
             .expect("failed to build app");
 
@@ -32,9 +42,12 @@ impl TestApp {
             .expect("fail to execute request")
     }
 
-    pub async fn sign_up(&self) -> reqwest::Response {
+    pub async fn sign_up<Body>(&self, body: &Body) -> reqwest::Response
+    where 
+    Body: serde::Serialize {
         self.http_client
             .post(format!("{}/signup", self.address))
+            .json(body)
             .send()
             .await
             .expect("failed to excute request")
@@ -56,19 +69,23 @@ impl TestApp {
             .expect("failed to execute request")
     }
 
-    pub async fn verrify_2fa(&self) -> reqwest::Response {
+    pub async fn verify_2fa(&self) -> reqwest::Response {
         self.http_client
-            .post(format!("{}/verrify_2fa", self.address))
+            .post(format!("{}/verify_2fa", self.address))
             .send()
             .await
             .expect("failed to execute request")
     }
 
-    pub async fn verrify_token(&self) -> reqwest::Response {
+    pub async fn verify_token(&self) -> reqwest::Response {
         self.http_client
-            .post(format!("{}/verrify_token", self.address))
+            .post(format!("{}/verify_token", self.address))
             .send()
             .await
             .expect("failed to execute request")
     }
+}
+
+pub fn get_random_email() -> String {
+    format!("{}@example.com", Uuid::new_v4())
 }
