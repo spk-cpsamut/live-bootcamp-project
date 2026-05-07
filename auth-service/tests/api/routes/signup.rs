@@ -95,7 +95,7 @@ async fn should_return_400_if_invalid_input() {
 
 #[tokio::test]
 async fn should_return_409_if_email_already_exists() {
-    let payload = serde_json::json!({"email": "supra@gmail.com", "password": "12345678", "requires2FA": true});
+    let payload = serde_json::json!({"email": "supra@gmail.com", "password": "123456789", "requires2FA": true});
     // Call the signup route twice. The second request should fail with a 409 HTTP status code
     let app = TestApp::new().await;
 

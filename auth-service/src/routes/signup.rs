@@ -1,23 +1,31 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
-use crate::{app_state::AppState, domain::User};
+use crate::{app_state::AppState, domain::{AuthAPIError, User}};
 
 pub async fn signup(
     State(AppState { user_store, .. }): State<AppState>,
     Json(payload): Json<SignupRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AuthAPIError> {
     let user = User::new(payload.email, payload.password, payload.requires_2fa);
+
+    if user.email.is_empty() || !user.email.contains("@") || user.password.len() < 8 {
+        return Err(AuthAPIError::InvalidCredentials);
+    }
 
     let mut user_store_write = user_store.write().await;
 
-    user_store_write.add_user(user).unwrap();
+    if let Ok(_) = user_store_write.get_user(&user.email) {
+        return Err(AuthAPIError::UserAlreadyExists);
+    }
+
+    let _ = user_store_write.add_user(user).map_err(|_| AuthAPIError::UnexpectedError);
 
     let response = Json(SignupResponse {
         message: "User created successfully!".to_string(),
     });
 
-    (StatusCode::CREATED, response)
+    Ok((StatusCode::CREATED, response))
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
