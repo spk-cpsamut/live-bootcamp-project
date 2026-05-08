@@ -1,5 +1,5 @@
 
-#[derive(Clone)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct Email(String);
 
 impl Email {

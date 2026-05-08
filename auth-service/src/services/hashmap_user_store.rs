@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::domain::{Email, User, UserStore, UserStoreError};
 
 pub struct HashmapUserStore {
-    pub email_map: HashMap<String, User>,
+    pub email_map: HashMap<Email, User>,
 }
 
 #[async_trait::async_trait]
@@ -12,7 +12,7 @@ impl UserStore for HashmapUserStore {
     async fn add_user(&mut self, user: User) -> Result<(), UserStoreError> {
         // Return `UserStoreError::UserAlreadyExists` if the user already exists,
         // otherwise insert the user into the hashmap and return `Ok(())`.
-        match self.email_map.entry(user.email.as_ref().to_string()) {
+        match self.email_map.entry(user.email.clone()) {
             Entry::Occupied(_) => Err(UserStoreError::UserAlreadyExists),
             Entry::Vacant(entry) => {
                 entry.insert(user);
@@ -21,7 +21,7 @@ impl UserStore for HashmapUserStore {
         }
     }
 
-    async fn get_user(&self, email: &str) -> Result<User, UserStoreError> {
+    async fn get_user(&self, email: &Email) -> Result<User, UserStoreError> {
         let user = self
             .email_map
             .get(email)
@@ -31,7 +31,7 @@ impl UserStore for HashmapUserStore {
         Ok(user)
     }
 
-    async fn validate_user(&self, email: &str, password: &str) -> Result<(), UserStoreError> {
+    async fn validate_user(&self, email: &Email, password: &str) -> Result<(), UserStoreError> {
         let user = self.get_user(email).await?;
 
         if user.password.as_ref() == password {
