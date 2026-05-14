@@ -19,6 +19,7 @@ use crate::{
 pub mod domain;
 pub mod routes;
 pub mod services;
+pub mod utils;
 
 pub mod app_state {
     use std::sync::Arc;

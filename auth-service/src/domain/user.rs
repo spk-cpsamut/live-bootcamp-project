@@ -1,7 +1,7 @@
 use crate::domain::{Email, Password};
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct User {
     pub email: Email,
     pub password: Password,

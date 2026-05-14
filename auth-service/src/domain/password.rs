@@ -1,5 +1,5 @@
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Password(String);
 
 impl Password {

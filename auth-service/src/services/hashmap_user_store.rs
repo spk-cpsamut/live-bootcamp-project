@@ -33,8 +33,8 @@ impl UserStore for HashmapUserStore {
 
     async fn validate_user(&self, email: &Email, password: &Password) -> Result<(), UserStoreError> {
         let user = self.get_user(email).await?;
-
-        if user.password.as_ref() == password.as_ref() {
+        
+        if !(user.password.as_ref() == password.as_ref()) {
             return Err(UserStoreError::InvalidCredentials);
         }
 

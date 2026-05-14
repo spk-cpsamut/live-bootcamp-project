@@ -1,5 +1,5 @@
 
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq, Debug)]
 pub struct Email(String);
 
 impl Email {
@@ -18,6 +18,7 @@ impl AsRef<str> for Email {
     }
 }
 
+#[derive(Debug)]
 pub enum EmailError {
     InvalidEmail,
 }
