@@ -1,12 +1,14 @@
-use std::{collections::HashMap, sync::{Arc}};
+use std::{collections::HashMap, sync::Arc};
 
-use auth_service::{Application, app_state, services::hashmap_user_store::HashmapUserStore};
+use auth_service::{Application, app_state, services::hashmap_user_store::HashmapUserStore, utils::constants::test};
+use reqwest::cookie::Jar;
 use serde;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
 pub struct TestApp {
     pub address: String,
+    pub cookie_jar: Arc<Jar>,
     pub http_client: reqwest::Client,
 }
 
@@ -16,8 +18,9 @@ impl TestApp {
             email_map: HashMap::new(),
         }));
         let app_state = app_state::AppState::new(user_state);
+        let cookie_jar = Arc::new(Jar::default());
 
-        let app = Application::build(app_state, "127.0.0.1:0")
+        let app = Application::build(app_state, test::APP_ADDRESS)
             .await
             .expect("failed to build app");
 
@@ -26,10 +29,14 @@ impl TestApp {
         #[allow(clippy::let_underscore_future)]
         let _ = tokio::spawn(app.run());
 
-        let http_client = reqwest::Client::new();
+        let http_client = reqwest::Client::builder()
+            .cookie_provider(cookie_jar.clone())
+            .build()
+            .unwrap();
 
         Self {
             address,
+            cookie_jar,
             http_client,
         }
     }
@@ -43,8 +50,9 @@ impl TestApp {
     }
 
     pub async fn sign_up<Body>(&self, body: &Body) -> reqwest::Response
-    where 
-    Body: serde::Serialize {
+    where
+        Body: serde::Serialize,
+    {
         self.http_client
             .post(format!("{}/signup", self.address))
             .json(body)

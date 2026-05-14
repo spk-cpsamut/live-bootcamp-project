@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use auth_service::{app_state, services::hashmap_user_store::HashmapUserStore, Application};
+use auth_service::{Application, app_state, services::hashmap_user_store::HashmapUserStore, utils::constants::prod};
 use axum::response::Html;
 use tokio::sync::RwLock;
 
@@ -10,7 +10,7 @@ async fn main() {
         email_map: HashMap::new(),
     }));
     let app_state = app_state::AppState::new(user_state);
-    let app = Application::build(app_state, "0.0.0.0:3000")
+    let app = Application::build(app_state, prod::APP_ADDRESS)
         .await
         .expect("fail to build app");
 

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, sync::Arc};
 
 use axum::{
-    http::StatusCode,
+    http::{Method, StatusCode},
     response::{IntoResponse, Response},
     routing::post,
     serve::Serve,
@@ -9,7 +9,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::{net::TcpListener, sync::RwLock};
-use tower_http::services::ServeDir;
+use tower_http::{cors::CorsLayer, services::ServeDir};
 
 use crate::{
     routes::{login, logout, signup, verify_2fa, verify_token},
@@ -58,7 +58,11 @@ impl IntoResponse for AuthAPIError {
             AuthAPIError::UnexpectedError => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Unexpected error")
             }
-            AuthAPIError::IncorrectCredentials => (StatusCode::UNAUTHORIZED, "incorrect credential"),
+            AuthAPIError::IncorrectCredentials => {
+                (StatusCode::UNAUTHORIZED, "incorrect credential")
+            }
+            AuthAPIError::MissingToken => (StatusCode::BAD_REQUEST, "missing token"),
+            AuthAPIError::InvalidToken => (StatusCode::UNAUTHORIZED, "invalid token"),
         };
         let body = Json(ErrorResponse {
             error: error_message.to_string(),
@@ -77,6 +81,20 @@ pub struct Application {
 
 impl Application {
     pub async fn build(app_state: AppState, address: &str) -> Result<Self, Box<dyn Error>> {
+        // Allow the app service(running on our local machine and in production) to call the auth service
+        let allowed_origins = [
+            "http://localhost:8000".parse()?,
+            // TODO: Replace [YOUR_DROPLET_IP] with your Droplet IP address
+            "http://[YOUR_DROPLET_IP]:8000".parse()?,
+        ];
+
+        let cors = CorsLayer::new()
+            // Allow GET and POST requests
+            .allow_methods([Method::GET, Method::POST])
+            // Allow cookies to be included in requests
+            .allow_credentials(true)
+            .allow_origin(allowed_origins);
+
         // Move the Router definition from `main.rs` to here.
         // Also, remove the `hello` route.
         // We don't need it at this point!
@@ -88,7 +106,8 @@ impl Application {
             .route("/logout", post(logout))
             .route("/verify_2fa", post(verify_2fa))
             .route("/verify_token", post(verify_token))
-            .with_state(app_state);
+            .with_state(app_state)
+            .layer(cors);
 
         let listener = tokio::net::TcpListener::bind(address).await?;
         let address = listener.local_addr()?.to_string();
