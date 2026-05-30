@@ -8,13 +8,11 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::{net::TcpListener, sync::RwLock};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 
-use crate::{
-    routes::{login, logout, signup, verify_2fa, verify_token},
-    services::hashmap_user_store::HashmapUserStore,
-};
+use crate::routes::{login, logout, signup, verify_2fa, verify_token};
 
 pub mod domain;
 pub mod routes;
@@ -25,19 +23,35 @@ pub mod app_state {
     use std::sync::Arc;
     use tokio::sync::RwLock;
 
-    use crate::domain::UserStore;
+    use crate::domain::{BannedTokenStore, EmailClient, TwoFACodeStore, UserStore};
 
     // Using a type alias to improve readability!
     pub type UserStoreType = Arc<RwLock<dyn UserStore>>;
+    pub type BannedTokenStoreType = Arc<RwLock<dyn BannedTokenStore>>;
+    pub type TwoFACodeStoreType = Arc<RwLock<dyn TwoFACodeStore>>;
+    pub type EmailClientType = Arc<dyn EmailClient>;
 
     #[derive(Clone)]
     pub struct AppState {
         pub user_store: UserStoreType,
+        pub banned_token_store: BannedTokenStoreType,
+        pub two_fa_code_store: TwoFACodeStoreType,
+        pub email_client: EmailClientType,
     }
 
     impl AppState {
-        pub fn new(user_store: UserStoreType) -> Self {
-            Self { user_store }
+        pub fn new(
+            user_store: UserStoreType,
+            banned_token_store: BannedTokenStoreType,
+            two_fa_code_store: TwoFACodeStoreType,
+            email_client: EmailClientType,
+        ) -> Self {
+            Self {
+                user_store,
+                banned_token_store,
+                two_fa_code_store,
+                email_client
+            }
         }
     }
 }
@@ -71,6 +85,11 @@ impl IntoResponse for AuthAPIError {
     }
 }
 
+
+pub async fn get_postgres_pool(url: &str) -> Result<PgPool, sqlx::Error> {
+    // Create a new PostgreSQL connection pool
+    PgPoolOptions::new().max_connections(5).connect(url).await
+}
 // This struct encapsulates our application-related logic.
 pub struct Application {
     server: Serve<TcpListener, Router, Router>,
@@ -86,11 +105,12 @@ impl Application {
             "http://localhost:8000".parse()?,
             // TODO: Replace [YOUR_DROPLET_IP] with your Droplet IP address
             "http://[YOUR_DROPLET_IP]:8000".parse()?,
+            "http://localhost:3000".parse()?,
         ];
 
         let cors = CorsLayer::new()
             // Allow GET and POST requests
-            .allow_methods([Method::GET, Method::POST])
+            .allow_methods([Method::GET, Method::POST, Method::OPTIONS, Method::HEAD])
             // Allow cookies to be included in requests
             .allow_credentials(true)
             .allow_origin(allowed_origins);

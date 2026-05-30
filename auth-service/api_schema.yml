@@ -147,7 +147,7 @@ paths:
                   error:
                     type: string
 
-  /verify-2fa:
+  /verify_2fa:
     post:
       summary: Verify 2FA token
       requestBody:

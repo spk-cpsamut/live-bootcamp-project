@@ -1,3 +1,7 @@
 
+pub mod data_stores;
 
-pub mod hashmap_user_store;
+
+
+pub use data_stores::*;
+pub mod mock_email_client;

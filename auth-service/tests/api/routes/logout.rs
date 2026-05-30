@@ -1,5 +1,10 @@
-use auth_service::utils::constants::JWT_COOKIE_NAME;
-use reqwest::Url;
+use std::collections::HashMap;
+
+use auth_service::{
+    domain::BannedTokenStoreError,
+    utils::constants::{JWT_COOKIE_NAME, JWT_SECRET},
+};
+use reqwest::{cookie::CookieStore, Url};
 use serde_json;
 
 use crate::helper::TestApp;
@@ -50,9 +55,30 @@ async fn should_return_200_if_valid_jwt_cookie() {
 
     assert_eq!(response.status().as_u16(), 200);
 
+    let cookies: HashMap<String, String> = app
+        .cookie_jar
+        .cookies(&Url::parse(&app.address).expect("Failed to parse URL"))
+        .into_iter()
+        .map(|x| {
+            let a: Vec<&str> = x.to_str().unwrap().split("=").collect();
+            (a.get(0).unwrap().to_string(), a.get(1).unwrap().to_string())
+        })
+        .collect();
+
+    let token = cookies
+        .get(JWT_COOKIE_NAME)
+        .expect("no cookie found")
+        .to_owned();
+
     let response = app.logout().await;
 
     assert_eq!(response.status().as_u16(), 200);
+    let read_banned_token_state = app.banned_token_state.read().await;
+
+    assert_eq!(
+        read_banned_token_state.is_token_not_banned(&token).await,
+        Err(BannedTokenStoreError::TokenBanned)
+    )
 }
 
 #[tokio::test]

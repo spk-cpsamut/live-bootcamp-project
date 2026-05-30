@@ -3,10 +3,9 @@ use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
-use crate::domain::Email;
+use crate::{app_state::BannedTokenStoreType, domain::Email};
 
 use super::constants::{JWT_COOKIE_NAME, JWT_SECRET};
-
 
 // Create cookie with a new JWT auth token
 pub fn generate_auth_cookie(email: &Email) -> Result<Cookie<'static>, GenerateTokenError> {
@@ -14,7 +13,7 @@ pub fn generate_auth_cookie(email: &Email) -> Result<Cookie<'static>, GenerateTo
     Ok(create_auth_cookie(token))
 }
 
-// Create cookie and set the value to the passed-in token string 
+// Create cookie and set the value to the passed-in token string
 fn create_auth_cookie(token: String) -> Cookie<'static> {
     let cookie = Cookie::build((JWT_COOKIE_NAME, token))
         .path("/") // apply cookie to all URLs on the server
@@ -58,13 +57,22 @@ fn generate_auth_token(email: &Email) -> Result<String, GenerateTokenError> {
 }
 
 // Check if JWT auth token is valid by decoding it using the JWT secret
-pub async fn validate_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+pub async fn validate_token(
+    token: &str,
+    banned_token_store: BannedTokenStoreType,
+) -> Result<Claims, ValidateTokenError> {
+    let banned_token_store_write = banned_token_store.write().await;
+    let _ = banned_token_store_write
+        .is_token_not_banned(token)
+        .await
+        .map_err(|_| ValidateTokenError::BannedToken)?;
     decode::<Claims>(
         token,
         &DecodingKey::from_secret(JWT_SECRET.as_bytes()),
         &Validation::default(),
     )
     .map(|data| data.claims)
+    .map_err(|_| ValidateTokenError::InvalidToken)
 }
 
 // Create JWT auth token by encoding claims using the JWT secret
@@ -82,8 +90,23 @@ pub struct Claims {
     pub exp: usize,
 }
 
+#[derive(Debug)]
+pub enum ValidateTokenError {
+    InvalidToken,
+    BannedToken,
+}
+
 #[cfg(test)]
 mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use tokio::sync::RwLock;
+
+    use crate::{
+        domain::BannedTokenStore,
+        services::hashmap_banned_token_store::{self, HashmapBannedTokenStore},
+    };
+
     use super::*;
 
     #[tokio::test]
@@ -119,7 +142,12 @@ mod tests {
     async fn test_validate_token_with_valid_token() {
         let email = Email::parse("test@example.com".to_owned()).unwrap();
         let token = generate_auth_token(&email).unwrap();
-        let result = validate_token(&token).await.unwrap();
+        let hashmap_banned_token_store = Arc::new(RwLock::new(HashmapBannedTokenStore {
+            banned_tokens: HashMap::new(),
+        }));
+        let result = validate_token(&token, hashmap_banned_token_store)
+            .await
+            .unwrap();
         assert_eq!(result.sub, "test@example.com");
 
         let exp = Utc::now()
@@ -132,9 +160,30 @@ mod tests {
 
     #[tokio::test]
     async fn test_validate_token_with_invalid_token() {
+        let hashmap_banned_token_store = Arc::new(RwLock::new(HashmapBannedTokenStore {
+            banned_tokens: HashMap::new(),
+        }));
         let token = "invalid_token".to_owned();
-        let result = validate_token(&token).await;
+        let result = validate_token(&token, hashmap_banned_token_store).await;
         assert!(result.is_err());
     }
-}
 
+    #[tokio::test]
+    async fn test_validate_token_with_banned_token() {
+        let email = Email::parse("test@example.com".to_owned()).unwrap();
+        let token = generate_auth_token(&email).unwrap();
+        let hashmap_banned_token_store = Arc::new(RwLock::new(HashmapBannedTokenStore {
+            banned_tokens: HashMap::new(),
+        }));
+
+        let hashmap_banned_token_store_clone = hashmap_banned_token_store.clone();
+        let mut hashmap_banned_token_store_clone_write =
+            hashmap_banned_token_store_clone.write().await;
+        let _ = hashmap_banned_token_store_clone_write
+            .add_token_to_ban_list(token.clone())
+            .await;
+        drop(hashmap_banned_token_store_clone_write);
+        let result = validate_token(&token, hashmap_banned_token_store.clone()).await;
+        assert_eq!(result.is_err(), true);
+    }
+}

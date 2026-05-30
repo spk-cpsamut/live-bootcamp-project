@@ -1,7 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use crate::domain::{Email, Password, User, UserStore, UserStoreError};
+use crate::domain::{Email, HashedPassword, User, UserStore, UserStoreError};
 
 pub struct HashmapUserStore {
     pub email_map: HashMap<Email, User>,
@@ -31,12 +31,13 @@ impl UserStore for HashmapUserStore {
         Ok(user)
     }
 
-    async fn validate_user(&self, email: &Email, password: &Password) -> Result<(), UserStoreError> {
+    async fn validate_user(&self, email: &Email, raw_password: &str) -> Result<(), UserStoreError> {
         let user = self.get_user(email).await?;
         
-        if !(user.password.as_ref() == password.as_ref()) {
-            return Err(UserStoreError::InvalidCredentials);
-        }
+        user.password // updated password verification
+            .verify_raw_password(raw_password)
+            .await
+            .map_err(|_| UserStoreError::InvalidCredentials);
 
         Ok(())
     }
