@@ -37,7 +37,7 @@ impl UserStore for HashmapUserStore {
         user.password // updated password verification
             .verify_raw_password(raw_password)
             .await
-            .map_err(|_| UserStoreError::InvalidCredentials);
+            .map_err(|_| UserStoreError::InvalidCredentials)?;
 
         Ok(())
     }

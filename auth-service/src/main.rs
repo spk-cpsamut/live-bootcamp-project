@@ -4,7 +4,7 @@ use auth_service::{
     Application, app_state, get_postgres_pool, services::{
         hashmap_banned_token_store::HashmapBannedTokenStore,
         hashmap_two_fa_code_store::HashmapTwoFACodeStore, hashmap_user_store::HashmapUserStore,
-        mock_email_client::MockEmailClient,
+        mock_email_client::MockEmailClient, postgres_user_store::PostgresUserStore,
     }, utils::constants::{DATABASE_URL, prod}
 };
 use axum::response::Html;
@@ -17,9 +17,7 @@ async fn main() {
     let pg_pool = configure_postgresql().await;
 
 
-    let user_state = Arc::new(RwLock::new(HashmapUserStore {
-        email_map: HashMap::new(),
-    }));
+    let user_state = Arc::new(RwLock::new(PostgresUserStore::new(pg_pool)));
 
     let banned_token_state = Arc::new(RwLock::new(HashmapBannedTokenStore {
         banned_tokens: HashMap::new(),
@@ -39,10 +37,6 @@ async fn main() {
         .expect("fail to build app");
 
     app.run().await.expect("Failed to run app")
-}
-
-async fn hello_handler() -> Html<&'static str> {
-    Html("<h1> Hello, Rusty!</h1>")
 }
 
 async fn configure_postgresql() -> PgPool {

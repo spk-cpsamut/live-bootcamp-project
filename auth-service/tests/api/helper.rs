@@ -2,16 +2,18 @@ use std::{collections::HashMap, sync::Arc};
 
 use auth_service::{
     app_state::{self, BannedTokenStoreType, TwoFACodeStoreType},
+    get_postgres_pool,
     services::{
         hashmap_banned_token_store::HashmapBannedTokenStore,
         hashmap_two_fa_code_store::HashmapTwoFACodeStore, hashmap_user_store::HashmapUserStore,
-        mock_email_client::MockEmailClient,
+        mock_email_client::MockEmailClient, postgres_user_store::PostgresUserStore,
     },
-    utils::constants::test,
+    utils::constants::{test, DATABASE_URL},
     Application,
 };
 use reqwest::cookie::Jar;
 use serde;
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -21,13 +23,16 @@ pub struct TestApp {
     pub http_client: reqwest::Client,
     pub banned_token_state: BannedTokenStoreType,
     pub two_fa_code_state: TwoFACodeStoreType,
+    pub pool: PgPool,
+    pub db_name: String,
 }
 
 impl TestApp {
     pub async fn new() -> Self {
-        let user_state = Arc::new(RwLock::new(HashmapUserStore {
-            email_map: HashMap::new(),
-        }));
+        let db_name = Uuid::new_v4().to_string();
+        let pg_pool = configure_postgresql(db_name.clone()).await;
+
+        let user_state = Arc::new(RwLock::new(PostgresUserStore::new(pg_pool.clone())));
 
         let banned_token_state = Arc::new(RwLock::new(HashmapBannedTokenStore {
             banned_tokens: HashMap::new(),
@@ -63,6 +68,8 @@ impl TestApp {
             http_client,
             banned_token_state,
             two_fa_code_state,
+            db_name,
+            pool: pg_pool.clone(),
         }
     }
 
@@ -128,6 +135,86 @@ impl TestApp {
     }
 }
 
+impl Drop for TestApp {
+    fn drop(&mut self) {
+        let db_name = self.db_name.clone();
+        let admin_conn_url = DATABASE_URL.to_owned();
+
+        // Cannot use block_on on the test runtime's worker thread; spin up a
+        // separate thread with its own runtime for sync cleanup in Drop.
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+            rt.block_on(delete_database(&admin_conn_url, &db_name));
+        })
+        .join()
+        .expect("Failed to join database cleanup thread");
+    }
+}
+
+async fn delete_database(admin_conn_url: &str, db_name: &str) {
+    let admin = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(admin_conn_url)
+        .await
+        .expect("Failed to connect to admin DB");
+
+    sqlx::query(
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity \
+         WHERE datname = $1 AND pid <> pg_backend_pid()",
+    )
+    .bind(db_name)
+    .execute(&admin)
+    .await
+    .expect("Failed to terminate connections");
+
+    sqlx::query(&format!(r#"DROP DATABASE IF EXISTS "{}";"#, db_name))
+        .execute(&admin)
+        .await
+        .expect("Failed to drop database");
+}
 pub fn get_random_email() -> String {
     format!("{}@example.com", Uuid::new_v4())
+}
+
+async fn configure_postgresql(db_name: String) -> PgPool {
+    let postgresql_conn_url = DATABASE_URL.to_owned();
+
+    // We are creating a new database for each test case, and we need to ensure each database has a unique name!
+
+    configure_database(&postgresql_conn_url, &db_name).await;
+
+    let postgresql_conn_url_with_db = format!("{}/{}", postgresql_conn_url, db_name);
+
+    // Create a new connection pool and return it
+    get_postgres_pool(&postgresql_conn_url_with_db)
+        .await
+        .expect("Failed to create Postgres connection pool!")
+}
+
+async fn configure_database(db_conn_string: &str, db_name: &str) {
+    // Create database connection
+    let connection = PgPoolOptions::new()
+        .connect(db_conn_string)
+        .await
+        .expect("Failed to create Postgres connection pool.");
+
+    // Create a new database
+    sqlx::query(&format!(r#"CREATE DATABASE "{}";"#, db_name))
+        .execute(&connection)
+        .await
+        .expect("Failed to create database.");
+
+    // Connect to new database
+    let db_conn_string = format!("{}/{}", db_conn_string, db_name);
+
+    let connection = PgPoolOptions::new()
+        .connect(&db_conn_string)
+        .await
+        .expect("Failed to create Postgres connection pool.");
+
+    // Run migrations against new database
+    sqlx::migrate!()
+        .run(&connection)
+        .await
+        .expect("Failed to migrate the database");
 }
