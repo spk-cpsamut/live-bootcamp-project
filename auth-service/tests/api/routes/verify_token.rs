@@ -1,4 +1,4 @@
-use crate::helper::TestApp;
+use crate::helper::{get_random_email, TestApp};
 use auth_service::{domain::Email, utils::auth};
 
 #[tokio::test]
@@ -14,7 +14,7 @@ async fn should_return_422_if_malformed_input() {
 async fn should_return_200_valid_token() {
     let app = TestApp::new().await;
 
-    let email = auth_service::domain::Email::parse("test@example.com".to_owned()).unwrap();
+    let email = auth_service::domain::Email::parse(get_random_email().to_owned()).unwrap();
     let token = auth_service::utils::auth::generate_auth_cookie(&email)
         .unwrap()
         .value()
@@ -41,7 +41,7 @@ async fn should_return_401_if_invalid_token() {
 async fn should_return_401_if_banned_token() {
     let app = TestApp::new().await;
 
-    let token = auth::generate_auth_cookie(&Email::parse("test@example.com".to_owned()).unwrap())
+    let token = auth::generate_auth_cookie(&Email::parse(get_random_email().to_owned()).unwrap())
         .unwrap()
         .value()
         .to_owned();
@@ -52,7 +52,7 @@ async fn should_return_401_if_banned_token() {
         .add_token_to_ban_list(token.to_owned())
         .await;
 
-        drop(banned_token_state_write);
+    drop(banned_token_state_write);
 
     let response = app
         .post_verify_token(&serde_json::json!({"token": token}))

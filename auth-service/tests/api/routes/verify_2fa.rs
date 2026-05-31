@@ -27,8 +27,8 @@ async fn should_return_400_if_invalid_input() {
     let app = TestApp::new().await;
 
     let invalid_email = serde_json::json!({"email": "invalid", "loginAttemptId": "123e4567-e89b-12d3-a456-426614174000", "2FACode": "123456"});
-    let invalid_login_attempt_id = serde_json::json!({"email": "test@gmail.com", "loginAttemptId": "not-uuid", "2FACode": "123456"});
-    let invalid_2_fa_code = serde_json::json!({"email": "test@gmail.com", "loginAttemptId": "123e4567-e89b-12d3-a456-426614174000", "2FACode": "12345"});
+    let invalid_login_attempt_id = serde_json::json!({"email": "test1@gmail.com", "loginAttemptId": "not-uuid", "2FACode": "123456"});
+    let invalid_2_fa_code = serde_json::json!({"email": "test2@gmail.com", "loginAttemptId": "123e4567-e89b-12d3-a456-426614174000", "2FACode": "12345"});
 
     let test_cases = vec![invalid_email, invalid_login_attempt_id, invalid_2_fa_code];
 
@@ -43,7 +43,7 @@ async fn should_return_400_if_invalid_input() {
 async fn should_return_401_if_incorrect_credentials() {
     let app = TestApp::new().await;
 
-    let email = Email::parse("test@gmail.com".to_owned()).expect("valid email");
+    let email = Email::parse("test3@gmail.com".to_owned()).expect("valid email");
     let login_attempt_id = LoginAttemptId::default();
     let code = TwoFACode::default();
     let _ = app
@@ -139,7 +139,7 @@ async fn should_return_401_if_old_code() {
 async fn should_return_200_if_correct_code() {
     let app = TestApp::new().await;
 
-    let email = Email::parse("test@gmail.com".to_owned()).expect("valid email");
+    let email = Email::parse("test4@gmail.com".to_owned()).expect("valid email");
 
     let login_attempt_id = LoginAttemptId::default();
     let code = TwoFACode::default();
@@ -169,7 +169,7 @@ assert!(!auth_cookie.value().is_empty());
 async fn should_return_401_if_same_code_twice() {    
     let app = TestApp::new().await;
 
-    let email = Email::parse("test@gmail.com".to_owned()).expect("valid email");
+    let email = Email::parse("test5@gmail.com".to_owned()).expect("valid email");
 
     let login_attempt_id = LoginAttemptId::default();
     let code = TwoFACode::default();

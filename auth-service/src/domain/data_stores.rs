@@ -3,6 +3,7 @@ use crate::domain::{Email, HashedPassword};
 use super::User;
 
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq)]
 pub enum UserStoreError {
@@ -53,7 +54,7 @@ pub enum TwoFACodeStoreError {
     UnexpectedError,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LoginAttemptId(String);
 
 impl LoginAttemptId {
@@ -78,7 +79,7 @@ impl AsRef<str> for LoginAttemptId {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TwoFACode(String);
 
 impl TwoFACode {
