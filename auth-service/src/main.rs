@@ -1,11 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
 use auth_service::{
-    Application, app_state, get_postgres_pool, services::{
+    app_state, get_postgres_pool, get_redis_client,
+    services::{
         hashmap_banned_token_store::HashmapBannedTokenStore,
         hashmap_two_fa_code_store::HashmapTwoFACodeStore, hashmap_user_store::HashmapUserStore,
         mock_email_client::MockEmailClient, postgres_user_store::PostgresUserStore,
-    }, utils::constants::{DATABASE_URL, prod}
+        redis_banned_token_store::RedisBannedTokenStore,
+    },
+    utils::constants::{prod, DATABASE_URL, REDIS_HOST_NAME},
+    Application,
 };
 use axum::response::Html;
 use sqlx::PgPool;
@@ -13,15 +17,14 @@ use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() {
-
     let pg_pool = configure_postgresql().await;
 
+    let redis_connection = configure_redis();
+    let arc_rw_redis_conn = Arc::new(RwLock::new(redis_connection));
 
     let user_state = Arc::new(RwLock::new(PostgresUserStore::new(pg_pool)));
 
-    let banned_token_state = Arc::new(RwLock::new(HashmapBannedTokenStore {
-        banned_tokens: HashMap::new(),
-    }));
+    let banned_token_state = Arc::new(RwLock::new(RedisBannedTokenStore::new(arc_rw_redis_conn)));
 
     let two_fa_code_state = Arc::new(RwLock::new(HashmapTwoFACodeStore::new()));
 
@@ -45,11 +48,18 @@ async fn configure_postgresql() -> PgPool {
         .await
         .expect("Failed to create Postgres connection pool!");
 
-    // Run database migrations against our test database! 
+    // Run database migrations against our test database!
     sqlx::migrate!()
         .run(&pg_pool)
         .await
         .expect("Failed to run migrations");
 
     pg_pool
+}
+
+fn configure_redis() -> redis::Connection {
+    get_redis_client(REDIS_HOST_NAME.to_owned())
+        .expect("Failed to get Redis client")
+        .get_connection()
+        .expect("Failed to get Redis connection")
 }

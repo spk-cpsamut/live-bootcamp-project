@@ -2,13 +2,14 @@ use std::{collections::HashMap, sync::Arc};
 
 use auth_service::{
     app_state::{self, BannedTokenStoreType, TwoFACodeStoreType},
-    get_postgres_pool,
+    get_postgres_pool, get_redis_client,
     services::{
         hashmap_banned_token_store::HashmapBannedTokenStore,
         hashmap_two_fa_code_store::HashmapTwoFACodeStore, hashmap_user_store::HashmapUserStore,
         mock_email_client::MockEmailClient, postgres_user_store::PostgresUserStore,
+        redis_banned_token_store::RedisBannedTokenStore,
     },
-    utils::constants::{test, DATABASE_URL},
+    utils::constants::{test, DATABASE_URL, REDIS_HOST_NAME},
     Application,
 };
 use reqwest::cookie::Jar;
@@ -32,11 +33,17 @@ impl TestApp {
         let db_name = Uuid::new_v4().to_string();
         let pg_pool = configure_postgresql(db_name.clone()).await;
 
+        let redis_conn = get_redis_client(REDIS_HOST_NAME.to_owned())
+            .expect("redis to run")
+            .get_connection()
+            .expect("redis to retreive conn");
+
+        let arc_rw_redis_conn = Arc::new(RwLock::new(redis_conn));
+
         let user_state = Arc::new(RwLock::new(PostgresUserStore::new(pg_pool.clone())));
 
-        let banned_token_state = Arc::new(RwLock::new(HashmapBannedTokenStore {
-            banned_tokens: HashMap::new(),
-        }));
+        let banned_token_state =
+            Arc::new(RwLock::new(RedisBannedTokenStore::new(arc_rw_redis_conn)));
 
         let two_fa_code_state = Arc::new(RwLock::new(HashmapTwoFACodeStore::new()));
         let email_client = Arc::new(MockEmailClient);

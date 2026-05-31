@@ -85,12 +85,12 @@ async fn should_return_200_if_valid_jwt_cookie() {
 async fn should_return_400_if_logout_called_twice_in_a_row() {
     let app = TestApp::new().await;
 
-    let sign_up_response = app.sign_up(&serde_json::json!({"email": "supra_test@gmail.com", "password": "123456789", "requires2FA": false})).await;
+    let sign_up_response = app.sign_up(&serde_json::json!({"email": "supra_test_1@gmail.com", "password": "123456789", "requires2FA": false})).await;
 
     assert_eq!(sign_up_response.status().as_u16(), 201);
 
     let response = app
-        .login(&serde_json::json!({"email": "supra_test@gmail.com", "password": "123456789"}))
+        .login(&serde_json::json!({"email": "supra_test_1@gmail.com", "password": "123456789"}))
         .await;
 
     assert_eq!(response.status().as_u16(), 200);

@@ -23,6 +23,7 @@ pub trait UserStore: Send + Sync {
 #[derive(Debug, PartialEq)]
 pub enum BannedTokenStoreError {
     TokenBanned,
+    Unexpected
 }
 
 #[async_trait::async_trait]

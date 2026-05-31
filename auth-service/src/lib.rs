@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, sync::Arc};
+use std::{ error::Error };
 
 use axum::{
     http::{Method, StatusCode},
@@ -7,6 +7,7 @@ use axum::{
     serve::Serve,
     Json, Router,
 };
+use redis::{Client, RedisResult};
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::{net::TcpListener, sync::RwLock};
@@ -141,4 +142,9 @@ impl Application {
         println!("listening on {}", &self.address);
         self.server.await
     }
+}
+
+pub fn get_redis_client(redis_hostname: String) -> RedisResult<Client> {
+    let redis_url = format!("redis://{}/", redis_hostname);
+    redis::Client::open(redis_url)
 }
