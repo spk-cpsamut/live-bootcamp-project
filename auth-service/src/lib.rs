@@ -1,4 +1,4 @@
-use std::{ error::Error };
+use std::error::Error;
 
 use axum::{
     http::{Method, StatusCode},
@@ -9,11 +9,14 @@ use axum::{
 };
 use redis::{Client, RedisResult};
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, postgres::PgPoolOptions};
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use tokio::{net::TcpListener, sync::RwLock};
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
 
-use crate::routes::{login, logout, signup, verify_2fa, verify_token};
+use crate::{
+    routes::{login, logout, signup, verify_2fa, verify_token},
+    utils::tracing::{make_span_with_request_id, on_request, on_response},
+};
 
 pub mod domain;
 pub mod routes;
@@ -51,7 +54,7 @@ pub mod app_state {
                 user_store,
                 banned_token_store,
                 two_fa_code_store,
-                email_client
+                email_client,
             }
         }
     }
@@ -67,10 +70,11 @@ pub struct ErrorResponse {
 
 impl IntoResponse for AuthAPIError {
     fn into_response(self) -> Response {
+        log_error_chain(&self);
         let (status, error_message) = match self {
             AuthAPIError::UserAlreadyExists => (StatusCode::CONFLICT, "User already exists"),
             AuthAPIError::InvalidCredentials => (StatusCode::BAD_REQUEST, "Invalid credentials"),
-            AuthAPIError::UnexpectedError => {
+            AuthAPIError::UnexpectedError(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Unexpected error")
             }
             AuthAPIError::IncorrectCredentials => {
@@ -86,6 +90,19 @@ impl IntoResponse for AuthAPIError {
     }
 }
 
+fn log_error_chain(e: &(dyn Error + 'static)) {
+    let separator =
+        "\n-----------------------------------------------------------------------------------\n";
+    let mut report = format!("{}{:?}\n", separator, e);
+    let mut current = e.source();
+    while let Some(cause) = current {
+        let str = format!("Caused by:\n\n{:?}", cause);
+        report = format!("{}\n{}", report, str);
+        current = cause.source();
+    }
+    report = format!("{}\n{}", report, separator);
+    tracing::error!("{}", report);
+}
 
 pub async fn get_postgres_pool(url: &str) -> Result<PgPool, sqlx::Error> {
     // Create a new PostgreSQL connection pool
@@ -128,7 +145,13 @@ impl Application {
             .route("/verify_2fa", post(verify_2fa))
             .route("/verify_token", post(verify_token))
             .with_state(app_state)
-            .layer(cors);
+            .layer(cors)
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(make_span_with_request_id)
+                    .on_request(on_request)
+                    .on_response(on_response),
+            );
 
         let listener = tokio::net::TcpListener::bind(address).await?;
         let address = listener.local_addr()?.to_string();
@@ -139,7 +162,7 @@ impl Application {
     }
 
     pub async fn run(self) -> Result<(), std::io::Error> {
-        println!("listening on {}", &self.address);
+        tracing::info!("listening on {}", &self.address);
         self.server.await
     }
 }

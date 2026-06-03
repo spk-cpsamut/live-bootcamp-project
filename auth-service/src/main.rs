@@ -1,23 +1,26 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use auth_service::{
-    app_state, get_postgres_pool, get_redis_client,
+    app_state::{self},
+    get_postgres_pool, get_redis_client,
     services::{
-        hashmap_banned_token_store::HashmapBannedTokenStore,
-        hashmap_two_fa_code_store::HashmapTwoFACodeStore, hashmap_user_store::HashmapUserStore,
         mock_email_client::MockEmailClient, postgres_user_store::PostgresUserStore,
         redis_banned_token_store::RedisBannedTokenStore,
         redis_two_fa_code_store::RedisTwoFACodeStore,
     },
-    utils::constants::{prod, DATABASE_URL, REDIS_HOST_NAME},
+    utils::{
+        constants::{prod, DATABASE_URL, REDIS_HOST_NAME},
+        tracing::init_tracing,
+    },
     Application,
 };
-use axum::response::Html;
 use sqlx::PgPool;
 use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() {
+    color_eyre::install().expect("Failed to install color_eyre");
+    init_tracing().expect("Failed to initialize tracing");
     let pg_pool = configure_postgresql().await;
 
     let redis_connection = configure_redis();

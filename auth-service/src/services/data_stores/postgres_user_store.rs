@@ -1,3 +1,4 @@
+use color_eyre::eyre::eyre;
 use sqlx::PgPool;
 
 use crate::domain::{Email, HashedPassword, User, UserStore, UserStoreError};
@@ -14,6 +15,7 @@ impl PostgresUserStore {
 
 #[async_trait::async_trait]
 impl UserStore for PostgresUserStore {
+    #[tracing::instrument(name = "Adding user to PostgreSQL", skip_all)]
     async fn add_user(&mut self, user: User) -> Result<(), UserStoreError> {
         sqlx::query!(
             r#"
@@ -26,10 +28,12 @@ impl UserStore for PostgresUserStore {
         )
         .execute(&self.pool)
         .await
-        .map_err(|_| UserStoreError::UserAlreadyExists)?;
+        .map_err(|e| UserStoreError::UnexpectedError(e.into()))?;
 
         Ok(())
     }
+
+    #[tracing::instrument(name = "Retrieving user from PostgreSQL", skip_all)]
     async fn get_user(&self, email: &Email) -> Result<User, UserStoreError> {
         let res = sqlx::query!(
             r#"
@@ -40,16 +44,18 @@ impl UserStore for PostgresUserStore {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|_| UserStoreError::UnexpectedError)?;
+        .map_err(|e| UserStoreError::UnexpectedError(eyre!(e)))?;
 
         let user = res.ok_or_else(|| UserStoreError::UserNotFound)?;
 
-        let email = Email::parse(user.email).map_err(|_| UserStoreError::UnexpectedError)?;
+        let email = Email::parse(user.email).map_err(|e| UserStoreError::UnexpectedError(eyre!("unexpected email error")))?;
         let hashed_password = HashedPassword::parse_password_hash(user.password_hash)
-            .map_err(|_| UserStoreError::UnexpectedError)?;
+            .map_err(|e| UserStoreError::UnexpectedError(eyre!(e)))?;
 
         Ok(User::new(email, hashed_password, user.requires_2fa))
     }
+
+    #[tracing::instrument(name = "Validating user credentials in PostgreSQL", skip_all)]
     async fn validate_user(&self, email: &Email, raw_password: &str) -> Result<(), UserStoreError> {
         let user = self.get_user(email).await?;
 

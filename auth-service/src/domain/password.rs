@@ -3,6 +3,7 @@ use argon2::{
     Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version,
 };
 use std::error::Error;
+use color_eyre::eyre::{eyre, Context, Result};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct HashedPassword(String);
@@ -27,20 +28,26 @@ impl HashedPassword {
         }
     }
 
+    #[tracing::instrument(name = "Verify raw password", skip_all)]
     pub async fn verify_raw_password(
         &self,
         password_candidate: &str,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let current_span: tracing::Span = tracing::Span::current();
         let password_hash = self.as_ref().to_owned();
         let password_candidate = password_candidate.to_owned();
 
         let blocking_task = tokio::task::spawn_blocking(move || {
-            let expected_password_hash: PasswordHash<'_> = PasswordHash::new(&password_hash)?;
-            let res: Result<(), Box<dyn Error + Send + Sync>> = Argon2::default()
-                .verify_password(password_candidate.as_bytes(), &expected_password_hash)
-                .map_err(|e| e.into());
+            // This code block ensures that the operations within the closure are executed within the context of the current span.
+            // This is especially useful for tracing operations that are performed in a different thread or task, such as within tokio::task::spawn_blocking.
+            current_span.in_scope(|| {
+                let expected_password_hash: PasswordHash<'_> = PasswordHash::new(&password_hash)?;
+                let res: Result<(), Box<dyn Error + Send + Sync>> = Argon2::default()
+                    .verify_password(password_candidate.as_bytes(), &expected_password_hash)
+                    .map_err(|e| e.into());
 
-            res
+                res
+            })
         });
 
         let _ = blocking_task.await??;
@@ -49,20 +56,24 @@ impl HashedPassword {
     }
 }
 
+#[tracing::instrument(name = "Computing password hash", skip_all)]
 async fn compute_password_hash(password: &str) -> Result<String, Box<dyn Error + Send + Sync>> {
+    let current_span = tracing::Span::current();
     let password = password.to_owned();
 
     let block_task = tokio::task::spawn_blocking(move || {
-        let salt: SaltString = SaltString::generate(&mut OsRng);
-        let password_hash = Argon2::new(
-            Algorithm::Argon2id,
-            Version::V0x13,
-            Params::new(15000, 2, 1, None)?,
-        )
-        .hash_password(password.as_bytes(), &salt)?
-        .to_string();
+        current_span.in_scope(|| {
+            let salt: SaltString = SaltString::generate(&mut OsRng);
+            let password_hash = Argon2::new(
+                Algorithm::Argon2id,
+                Version::V0x13,
+                Params::new(15000, 2, 1, None)?,
+            )
+            .hash_password(password.as_bytes(), &salt)?
+            .to_string();
 
-        Ok::<String, Box<dyn Error + Send + Sync>>(password_hash)
+            Ok::<String, Box<dyn Error + Send + Sync>>(password_hash)
+        })
     });
 
     let hashed = block_task.await??;

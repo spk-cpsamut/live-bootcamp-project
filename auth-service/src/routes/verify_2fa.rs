@@ -1,5 +1,6 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_extra::extract::CookieJar;
+use color_eyre::eyre::{self, eyre};
 use serde::Deserialize;
 
 use crate::{
@@ -8,6 +9,8 @@ use crate::{
     utils::auth::generate_auth_cookie,
 };
 
+
+#[tracing::instrument(name = "verify_2fa", skip_all)]
 pub async fn verify_2fa(
     State(AppState {
         two_fa_code_store, ..
@@ -37,12 +40,16 @@ pub async fn verify_2fa(
         return (jar, Err(AuthAPIError::IncorrectCredentials));
     }
 
-    let Ok(auth_cookie) = generate_auth_cookie(&email) else {
-        return (jar, Err(AuthAPIError::UnexpectedError));
+    let auth_cookie = match generate_auth_cookie(&email) {
+        Ok(cookie) => cookie,
+        Err(err) => {
+            tracing::error!(?err, "failed to generate auth cookie");
+            return (jar, Err(AuthAPIError::UnexpectedError(eyre!(err).wrap_err("auth error"))));
+        }
     };
 
     if two_fa_code_store.remove_code(&email).await.is_err() {
-        return (jar, Err(AuthAPIError::UnexpectedError));
+        return (jar, Err(AuthAPIError::UnexpectedError(eyre!("unexpected eror"))));
     };
 
     let update_jar = jar.add(auth_cookie);

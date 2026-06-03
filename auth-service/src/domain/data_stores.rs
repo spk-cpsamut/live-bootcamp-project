@@ -2,35 +2,58 @@ use crate::domain::{Email, HashedPassword};
 
 use super::User;
 
+use color_eyre::eyre::{eyre, Context, Report, Result};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Error)]
 pub enum UserStoreError {
+    #[error("User already exists")]
     UserAlreadyExists,
+    #[error("User not found")]
     UserNotFound,
+    #[error("Invalid credentials")]
     InvalidCredentials,
-    UnexpectedError,
+    #[error("Unexpected error")]
+    UnexpectedError(#[source] Report),
+}
+
+impl PartialEq for UserStoreError {
+    fn eq(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (Self::UserAlreadyExists, Self::UserAlreadyExists)
+                | (Self::UserNotFound, Self::UserNotFound)
+                | (Self::InvalidCredentials, Self::InvalidCredentials)
+                | (Self::UnexpectedError(_), Self::UnexpectedError(_))
+        )
+    }
 }
 
 #[async_trait::async_trait]
 pub trait UserStore: Send + Sync {
     async fn add_user(&mut self, user: User) -> Result<(), UserStoreError>;
     async fn get_user(&self, email: &Email) -> Result<User, UserStoreError>;
-    async fn validate_user(&self, email: &Email, raw_password: &str)
-        -> Result<(), UserStoreError>;
+    async fn validate_user(&self, email: &Email, raw_password: &str) -> Result<(), UserStoreError>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Error)]
 pub enum BannedTokenStoreError {
-    TokenBanned,
-    Unexpected
+    #[error("unexpedted error")]
+    UnexpectedError(#[source] Report),
+}
+
+impl PartialEq for BannedTokenStoreError {
+    fn eq(&self, other: &Self) -> bool {
+        matches!((self, other), (Self::UnexpectedError(_), Self::UnexpectedError(_)))
+    }
 }
 
 #[async_trait::async_trait]
 pub trait BannedTokenStore: Send + Sync {
     async fn add_token_to_ban_list(&mut self, token: String) -> Result<(), BannedTokenStoreError>;
-    async fn is_token_not_banned(&self, token: &str) -> Result<(), BannedTokenStoreError>;
+    async fn is_token_not_banned(&self, token: &str) -> Result<bool, BannedTokenStoreError>;
 }
 
 #[async_trait::async_trait]
@@ -48,18 +71,30 @@ pub trait TwoFACodeStore: Send + Sync {
     ) -> Result<(LoginAttemptId, TwoFACode), TwoFACodeStoreError>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Error)]
 pub enum TwoFACodeStoreError {
+    #[error("Login Attempt ID not found")]
     LoginAttemptIdNotFound,
-    UnexpectedError,
+    #[error("Unexpected error")]
+    UnexpectedError(#[source] Report),
+}
+
+impl PartialEq for TwoFACodeStoreError {
+    fn eq(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (Self::LoginAttemptIdNotFound, Self::LoginAttemptIdNotFound)
+                | (Self::UnexpectedError(_), Self::UnexpectedError(_))
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LoginAttemptId(String);
 
 impl LoginAttemptId {
-    pub fn parse(id: String) -> Result<Self, String> {
-        let _ = uuid::Uuid::parse_str(&id).map_err(|_| "Cannot parse id")?;
+    pub fn parse(id: String) -> Result<Self> {
+        let _ = uuid::Uuid::parse_str(&id).wrap_err("Invalid FA code")?;
 
         Ok(LoginAttemptId(id))
     }
@@ -83,9 +118,9 @@ impl AsRef<str> for LoginAttemptId {
 pub struct TwoFACode(String);
 
 impl TwoFACode {
-    pub fn parse(code: String) -> Result<Self, String> {
+    pub fn parse(code: String) -> Result<Self> {
         if code.len() != 6 {
-            return Err("Invalid Code".to_owned());
+            return Err(eyre!("Invalid Code".to_owned()));
         }
 
         Ok(Self(code))

@@ -8,6 +8,8 @@ use crate::{
     utils::auth::TOKEN_TTL_SECONDS,
 };
 
+use color_eyre::{eyre::Context, Result};
+
 pub struct RedisBannedTokenStore {
     conn: Arc<RwLock<Connection>>,
 }
@@ -20,6 +22,8 @@ impl RedisBannedTokenStore {
 
 #[async_trait::async_trait]
 impl BannedTokenStore for RedisBannedTokenStore {
+    
+    #[tracing::instrument(name = "add_token_to_ban_list", skip_all)]
     async fn add_token_to_ban_list(&mut self, token: String) -> Result<(), BannedTokenStoreError> {
         // TODO:
         // 1. Create a new key using the get_key helper function.
@@ -29,12 +33,14 @@ impl BannedTokenStore for RedisBannedTokenStore {
 
         redis_writer
             .set_ex::<std::string::String, bool, u64>(key, true, TOKEN_TTL_SECONDS as u64)
-            .map_err(|_| BannedTokenStoreError::Unexpected)?;
+            .wrap_err("failed to set banned token in Redis")
+            .map_err(BannedTokenStoreError::UnexpectedError)?;
 
         Ok(())
     }
 
-    async fn is_token_not_banned(&self, token: &str) -> Result<(), BannedTokenStoreError> {
+    #[tracing::instrument(name = "is_token_not_banned", skip_all)]
+    async fn is_token_not_banned(&self, token: &str) -> Result<bool, BannedTokenStoreError> {
         // Check if the token exists by calling the exists method on the Redis connection
 
         let mut redis = self.conn.write().await;
@@ -42,13 +48,14 @@ impl BannedTokenStore for RedisBannedTokenStore {
         let key = get_key(token);
         let value = redis
             .exists::<std::string::String, bool>(key)
-            .map_err(|_| BannedTokenStoreError::Unexpected)?;
+            .wrap_err("failed to check if token exists in Redis")
+            .map_err(BannedTokenStoreError::UnexpectedError)?;
 
         if value {
-            return Err(BannedTokenStoreError::TokenBanned);
+            return Ok(true);
         }
 
-        Ok(())
+        Ok(false)
     }
 }
 

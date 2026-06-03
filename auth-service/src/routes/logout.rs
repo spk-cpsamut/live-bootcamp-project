@@ -10,6 +10,8 @@ use crate::{
     utils::{auth::validate_token, constants::JWT_COOKIE_NAME},
 };
 
+
+#[tracing::instrument(name = "logout", skip_all)]
 pub async fn logout(
     State(AppState {
         banned_token_store, ..

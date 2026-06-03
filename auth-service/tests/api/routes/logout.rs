@@ -77,7 +77,7 @@ async fn should_return_200_if_valid_jwt_cookie() {
 
     assert_eq!(
         read_banned_token_state.is_token_not_banned(&token).await,
-        Err(BannedTokenStoreError::TokenBanned)
+        Ok(true)
     )
 }
 

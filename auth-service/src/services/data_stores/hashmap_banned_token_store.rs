@@ -13,13 +13,13 @@ impl BannedTokenStore for HashmapBannedTokenStore {
         Ok(())
     }
 
-    async fn is_token_not_banned(&self, token: &str) -> Result<(), BannedTokenStoreError> {
+    async fn is_token_not_banned(&self, token: &str) -> Result<bool, BannedTokenStoreError> {
         let is_token_banned = self.banned_tokens.get(token).unwrap_or(&false);
 
         if *is_token_banned {
-            return Err(BannedTokenStoreError::TokenBanned);
+            return Ok(true);
         }
-        Ok(())
+        Ok(false)
     }
 }
 
@@ -41,7 +41,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn should_return_TokenBanned_if_token_is_banned() {
+    async fn should_return_true_if_token_is_banned() {
         let token = "test_token".to_owned();
 
         let mut store = HashmapBannedTokenStore {
@@ -52,7 +52,7 @@ mod tests {
 
         let ret = store.is_token_not_banned(&token).await;
 
-        assert_eq!(ret, Err(BannedTokenStoreError::TokenBanned));
+        assert_eq!(ret, Ok(true));
     }
 
     #[tokio::test]
