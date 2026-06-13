@@ -2,6 +2,7 @@ use auth_service::{
     domain::{Email, LoginAttemptId, TwoFACode},
     routes::TwoFactorAuthResponse, utils::constants::JWT_COOKIE_NAME,
 };
+use secrecy::ExposeSecret;
 
 use crate::helper::{get_random_email, TestApp};
 
@@ -43,7 +44,7 @@ async fn should_return_400_if_invalid_input() {
 async fn should_return_401_if_incorrect_credentials() {
     let app = TestApp::new().await;
 
-    let email = Email::parse("test3@gmail.com".to_owned()).expect("valid email");
+    let email = Email::parse("test3@gmail.com".to_owned().into()).expect("valid email");
     let login_attempt_id = LoginAttemptId::default();
     let code = TwoFACode::default();
     let _ = app
@@ -53,9 +54,9 @@ async fn should_return_401_if_incorrect_credentials() {
         .add_code(email.clone(), login_attempt_id.clone(), code.clone())
         .await;
 
-    let not_found_email_case = serde_json::json!({"email": "notfound@gmail.com", "loginAttemptId": login_attempt_id.clone().clone().as_ref(), "2FACode": code.clone().as_ref()});
-    let not_match_login_attempt_id = serde_json::json!({"email": email.clone().as_ref(), "loginAttemptId": "123e4567-e89b-12d3-a456-426614174000", "2FACode": code.clone().as_ref()});
-    let not_match_two_fa_code = serde_json::json!({"email": email.clone().as_ref(), "loginAttemptId": login_attempt_id.clone().clone().as_ref(), "2FACode": "000111"});
+    let not_found_email_case = serde_json::json!({"email": "notfound@gmail.com", "loginAttemptId": login_attempt_id.clone().clone().as_ref().expose_secret(), "2FACode": code.clone().as_ref().expose_secret()});
+    let not_match_login_attempt_id = serde_json::json!({"email": email.clone().as_ref().expose_secret(), "loginAttemptId": "123e4567-e89b-12d3-a456-426614174000", "2FACode": code.clone().as_ref().expose_secret()});
+    let not_match_two_fa_code = serde_json::json!({"email": email.clone().as_ref().expose_secret(), "loginAttemptId": login_attempt_id.clone().clone().as_ref().expose_secret(), "2FACode": "000111"});
     let test_cases = vec![
         not_found_email_case,
         not_match_login_attempt_id,
@@ -110,7 +111,7 @@ async fn should_return_401_if_old_code() {
         .two_fa_code_state
         .read()
         .await
-        .get_code(&Email::parse(random_email.clone()).unwrap())
+        .get_code(&Email::parse(random_email.clone().into()).unwrap())
         .await
         .unwrap();
 
@@ -127,7 +128,7 @@ async fn should_return_401_if_old_code() {
     let request_body = serde_json::json!({
         "email": random_email,
         "loginAttemptId": login_attempt_id,
-        "2FACode": code
+        "2FACode": code.expose_secret()
     });
 
     let response = app.verify_2fa(&request_body).await;
@@ -139,7 +140,7 @@ async fn should_return_401_if_old_code() {
 async fn should_return_200_if_correct_code() {
     let app = TestApp::new().await;
 
-    let email = Email::parse("test4@gmail.com".to_owned()).expect("valid email");
+    let email = Email::parse("test4@gmail.com".to_owned().into()).expect("valid email");
 
     let login_attempt_id = LoginAttemptId::default();
     let code = TwoFACode::default();
@@ -151,7 +152,7 @@ async fn should_return_200_if_correct_code() {
         .await
         .expect("add code successfully");
 
-    let body = serde_json::json!({"email": email.as_ref().to_owned(), "loginAttemptId": login_attempt_id.as_ref(), "2FACode": code.as_ref()});
+    let body = serde_json::json!({"email": email.as_ref().to_owned().expose_secret(), "loginAttemptId": login_attempt_id.as_ref().expose_secret(), "2FACode": code.as_ref().expose_secret()});
 
     let res = app.verify_2fa(&body).await;
 
@@ -169,7 +170,7 @@ assert!(!auth_cookie.value().is_empty());
 async fn should_return_401_if_same_code_twice() {    
     let app = TestApp::new().await;
 
-    let email = Email::parse("test5@gmail.com".to_owned()).expect("valid email");
+    let email = Email::parse("test5@gmail.com".to_owned().into()).expect("valid email");
 
     let login_attempt_id = LoginAttemptId::default();
     let code = TwoFACode::default();
@@ -181,7 +182,7 @@ async fn should_return_401_if_same_code_twice() {
         .await
         .expect("add code successfully");
 
-        let body = serde_json::json!({"email": email.as_ref().to_owned(), "loginAttemptId": login_attempt_id.as_ref(), "2FACode": code.as_ref()});
+        let body = serde_json::json!({"email": email.as_ref().to_owned().expose_secret(), "loginAttemptId": login_attempt_id.as_ref().expose_secret(), "2FACode": code.as_ref().expose_secret()});
 
     let res = app.verify_2fa(&body).await;
 

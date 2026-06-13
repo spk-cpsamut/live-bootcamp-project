@@ -4,7 +4,8 @@ use super::User;
 
 use color_eyre::eyre::{eyre, Context, Report, Result};
 use rand::Rng;
-use serde::{Deserialize, Serialize};
+use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize, Serializer};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -46,7 +47,10 @@ pub enum BannedTokenStoreError {
 
 impl PartialEq for BannedTokenStoreError {
     fn eq(&self, other: &Self) -> bool {
-        matches!((self, other), (Self::UnexpectedError(_), Self::UnexpectedError(_)))
+        matches!(
+            (self, other),
+            (Self::UnexpectedError(_), Self::UnexpectedError(_))
+        )
     }
 }
 
@@ -89,12 +93,27 @@ impl PartialEq for TwoFACodeStoreError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LoginAttemptId(String);
+#[derive(Debug, Clone, Deserialize)]
+pub struct LoginAttemptId(SecretString);
+
+impl PartialEq for LoginAttemptId {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Serialize for LoginAttemptId {
+    fn serialize<S>(&self, serializer: S) -> std::prelude::v1::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.0.expose_secret())
+    }
+}
 
 impl LoginAttemptId {
-    pub fn parse(id: String) -> Result<Self> {
-        let _ = uuid::Uuid::parse_str(&id).wrap_err("Invalid FA code")?;
+    pub fn parse(id: SecretString) -> Result<Self> {
+        let _ = uuid::Uuid::parse_str(&id.expose_secret()).wrap_err("Invalid FA code")?;
 
         Ok(LoginAttemptId(id))
     }
@@ -104,26 +123,41 @@ impl Default for LoginAttemptId {
     fn default() -> Self {
         let uuid = uuid::Uuid::new_v4();
 
-        Self(uuid.to_string())
+        Self(uuid.to_string().into())
     }
 }
 
-impl AsRef<str> for LoginAttemptId {
-    fn as_ref(&self) -> &str {
+impl AsRef<SecretString> for LoginAttemptId {
+    fn as_ref(&self) -> &SecretString {
         &self.0
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct TwoFACode(String);
+#[derive(Clone, Debug, Deserialize)]
+pub struct TwoFACode(SecretString);
 
 impl TwoFACode {
-    pub fn parse(code: String) -> Result<Self> {
-        if code.len() != 6 {
+    pub fn parse(code: SecretString) -> Result<Self> {
+        if code.expose_secret().len() != 6 {
             return Err(eyre!("Invalid Code".to_owned()));
         }
 
         Ok(Self(code))
+    }
+}
+
+impl PartialEq for TwoFACode {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.expose_secret() == other.0.expose_secret()
+    }
+}
+
+impl Serialize for TwoFACode {
+    fn serialize<S>(&self, serializer: S) -> std::prelude::v1::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.0.expose_secret())
     }
 }
 
@@ -132,12 +166,12 @@ impl Default for TwoFACode {
         let mut rng = rand::rng();
         let n: u32 = rng.random_range(100_000..=999_999);
 
-        Self(n.to_string())
+        Self(n.to_string().into())
     }
 }
 
-impl AsRef<str> for TwoFACode {
-    fn as_ref(&self) -> &str {
+impl AsRef<SecretString> for TwoFACode {
+    fn as_ref(&self) -> &SecretString {
         &self.0
     }
 }

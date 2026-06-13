@@ -8,6 +8,7 @@ use axum::{
     Json, Router,
 };
 use redis::{Client, RedisResult};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use tokio::{net::TcpListener, sync::RwLock};
@@ -104,9 +105,9 @@ fn log_error_chain(e: &(dyn Error + 'static)) {
     tracing::error!("{}", report);
 }
 
-pub async fn get_postgres_pool(url: &str) -> Result<PgPool, sqlx::Error> {
+pub async fn get_postgres_pool(url: &SecretString) -> Result<PgPool, sqlx::Error> {
     // Create a new PostgreSQL connection pool
-    PgPoolOptions::new().max_connections(5).connect(url).await
+    PgPoolOptions::new().max_connections(5).connect(url.expose_secret()).await
 }
 // This struct encapsulates our application-related logic.
 pub struct Application {

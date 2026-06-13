@@ -1,6 +1,6 @@
-use axum::{body, extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use axum_extra::extract::CookieJar;
-use color_eyre::eyre::eyre;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -8,7 +8,6 @@ use crate::{
     domain::{AuthAPIError, Email, LoginAttemptId, TwoFACode},
     utils::auth::generate_auth_cookie,
 };
-
 
 #[tracing::instrument(name = "login", skip_all)]
 pub async fn login(
@@ -27,7 +26,10 @@ pub async fn login(
 
     let user_store_read = user_store.read().await;
 
-    let Ok(_) = user_store_read.validate_user(&email, &body.password).await else {
+    let Ok(_) = user_store_read
+        .validate_user(&email, &body.password.expose_secret())
+        .await
+    else {
         return (jar, Err(AuthAPIError::IncorrectCredentials));
     };
     let Ok(user) = user_store_read.get_user(&email).await else {
@@ -63,7 +65,7 @@ async fn handle_2fa(
     }
 
     if let Err(e) = email_client
-        .send_email(&email, "2FA code", two_fa_code.as_ref())
+        .send_email(&email, "2FA code", two_fa_code.as_ref().expose_secret())
         .await
     {
         return (jar, Err(AuthAPIError::UnexpectedError(e)));
@@ -75,7 +77,7 @@ async fn handle_2fa(
             StatusCode::PARTIAL_CONTENT,
             Json(LoginResponse::TwoFactorAuth(TwoFactorAuthResponse {
                 message: "2FA required".to_owned(),
-                login_attempt_id: login_attempt_id.as_ref().to_owned(),
+                login_attempt_id: login_attempt_id.as_ref().expose_secret().to_owned(),
             })),
         )),
     )
@@ -104,8 +106,8 @@ async fn handle_no_2fa(
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
-    email: String,
-    password: String,
+    email: SecretString,
+    password: SecretString,
 }
 
 #[derive(Debug, Serialize)]

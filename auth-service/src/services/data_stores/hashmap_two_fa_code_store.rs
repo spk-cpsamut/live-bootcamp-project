@@ -57,7 +57,7 @@ mod tests {
             codes: HashMap::new(),
         };
 
-        let email = Email::parse("test@gmail.com".to_owned()).expect("Invalid email");
+        let email = Email::parse("test@gmail.com".to_owned().into()).expect("Invalid email");
         let id = LoginAttemptId::default();
         let code = TwoFACode::default();
 
@@ -77,7 +77,7 @@ mod tests {
             codes: HashMap::new(),
         };
 
-        let email = Email::parse("test@gmail.com".to_owned()).expect("Invalid email");
+        let email = Email::parse("test@gmail.com".to_owned().into()).expect("Invalid email");
         let id = LoginAttemptId::default();
         let code = TwoFACode::default();
 
@@ -98,11 +98,11 @@ mod tests {
             codes: HashMap::new(),
         };
 
-        let email = Email::parse("test@gmail.com".to_owned()).expect("Invalid email");
+        let email = Email::parse("test@gmail.com".to_owned().into()).expect("Invalid email");
         let id = LoginAttemptId::default();
         let code = TwoFACode::default();
 
-        let email2 = Email::parse("tt01@gmail.com".to_owned()).expect("Invalid email");
+        let email2 = Email::parse("tt01@gmail.com".to_owned().into()).expect("Invalid email");
 
         code_store
             .codes
@@ -121,7 +121,7 @@ mod tests {
             codes: HashMap::new(),
         };
 
-        let email = Email::parse("test@gmail.com".to_owned()).expect("Invalid email");
+        let email = Email::parse("test@gmail.com".to_owned().into()).expect("Invalid email");
         let id = LoginAttemptId::default();
         let code = TwoFACode::default();
 
@@ -140,11 +140,11 @@ mod tests {
             codes: HashMap::new(),
         };
 
-        let email = Email::parse("test@gmail.com".to_owned()).expect("Invalid email");
+        let email = Email::parse("test@gmail.com".to_owned().into()).expect("Invalid email");
         let id = LoginAttemptId::default();
         let code = TwoFACode::default();
 
-        let email2 = Email::parse("tt01@gmail.com".to_owned()).expect("Invalid email");
+        let email2 = Email::parse("tt01@gmail.com".to_owned().into()).expect("Invalid email");
 
         code_store
             .codes

@@ -18,15 +18,15 @@ pub async fn verify_2fa(
     jar: CookieJar,
     Json(body): Json<Verify2FARequest>,
 ) -> (CookieJar, Result<impl IntoResponse, AuthAPIError>) {
-    let Ok(email) = Email::parse(body.email) else {
+    let Ok(email) = Email::parse(body.email.into()) else {
         return (jar, Err(AuthAPIError::InvalidCredentials));
     };
 
-    let Ok(login_attempt_id) = LoginAttemptId::parse(body.login_attempt_id) else {
+    let Ok(login_attempt_id) = LoginAttemptId::parse(body.login_attempt_id.into()) else {
         return (jar, Err(AuthAPIError::InvalidCredentials));
     };
 
-    let Ok(two_fa_code) = TwoFACode::parse(body.two_fa_code) else {
+    let Ok(two_fa_code) = TwoFACode::parse(body.two_fa_code.into()) else {
         return (jar, Err(AuthAPIError::InvalidCredentials));
     };
 

@@ -14,7 +14,7 @@ async fn should_return_422_if_malformed_input() {
 async fn should_return_200_valid_token() {
     let app = TestApp::new().await;
 
-    let email = auth_service::domain::Email::parse(get_random_email().to_owned()).unwrap();
+    let email = auth_service::domain::Email::parse(get_random_email().to_owned().into()).unwrap();
     let token = auth_service::utils::auth::generate_auth_cookie(&email)
         .unwrap()
         .value()
@@ -41,7 +41,7 @@ async fn should_return_401_if_invalid_token() {
 async fn should_return_401_if_banned_token() {
     let app = TestApp::new().await;
 
-    let token = auth::generate_auth_cookie(&Email::parse(get_random_email().to_owned()).unwrap())
+    let token = auth::generate_auth_cookie(&Email::parse(get_random_email().to_owned().into()).unwrap())
         .unwrap()
         .value()
         .to_owned();

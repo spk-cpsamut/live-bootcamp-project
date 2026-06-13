@@ -14,6 +14,7 @@ use auth_service::{
     Application,
 };
 use reqwest::cookie::Jar;
+use secrecy::ExposeSecret;
 use serde;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use tokio::sync::RwLock;
@@ -153,7 +154,7 @@ impl Drop for TestApp {
         // separate thread with its own runtime for sync cleanup in Drop.
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
-            rt.block_on(delete_database(&admin_conn_url, &db_name));
+            rt.block_on(delete_database(&admin_conn_url.expose_secret(), &db_name));
         })
         .join()
         .expect("Failed to join database cleanup thread");
@@ -190,12 +191,12 @@ async fn configure_postgresql(db_name: String) -> PgPool {
 
     // We are creating a new database for each test case, and we need to ensure each database has a unique name!
 
-    configure_database(&postgresql_conn_url, &db_name).await;
+    configure_database(&postgresql_conn_url.expose_secret(), &db_name).await;
 
-    let postgresql_conn_url_with_db = format!("{}/{}", postgresql_conn_url, db_name);
+    let postgresql_conn_url_with_db = format!("{}/{}", postgresql_conn_url.expose_secret(), db_name);
 
     // Create a new connection pool and return it
-    get_postgres_pool(&postgresql_conn_url_with_db)
+    get_postgres_pool(&postgresql_conn_url_with_db.into())
         .await
         .expect("Failed to create Postgres connection pool!")
 }

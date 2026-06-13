@@ -1,6 +1,7 @@
 use auth_service::{
     domain::Email, routes::TwoFactorAuthResponse, utils::constants::JWT_COOKIE_NAME,
 };
+use secrecy::ExposeSecret;
 
 use crate::helper::{get_random_email, TestApp};
 
@@ -127,7 +128,7 @@ async fn should_return_206_if_valid_credentials_and_2fa_enabled() {
 
     assert_eq!(json_body.message, "2FA required".to_owned());
 
-    let email = Email::parse(random_email.clone()).expect("valid email");
+    let email = Email::parse(random_email.clone().into()).expect("valid email");
 
     let (login_attmpt_id, _) = app
         .two_fa_code_state
@@ -137,5 +138,5 @@ async fn should_return_206_if_valid_credentials_and_2fa_enabled() {
         .await
         .expect("found code");
 
-    assert_eq!(json_body.login_attempt_id, login_attmpt_id.as_ref());
+    assert_eq!(json_body.login_attempt_id, login_attmpt_id.as_ref().expose_secret());
 }
