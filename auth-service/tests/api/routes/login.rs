@@ -2,6 +2,7 @@ use auth_service::{
     domain::Email, routes::TwoFactorAuthResponse, utils::constants::JWT_COOKIE_NAME,
 };
 use secrecy::ExposeSecret;
+use wiremock::{Mock, ResponseTemplate, matchers::{method, path}};
 
 use crate::helper::{get_random_email, TestApp};
 
@@ -117,6 +118,13 @@ async fn should_return_206_if_valid_credentials_and_2fa_enabled() {
         "password": password,
         "requires2FA": true,
     });
+
+    Mock::given(path("/email"))
+    .and(method("POST"))
+    .respond_with(ResponseTemplate::new(200))
+    .expect(1)
+    .mount(&app.email_server)
+    .await;
     let response = app.login(&login_body).await;
 
     assert_eq!(response.status().as_u16(), 206);
@@ -138,5 +146,8 @@ async fn should_return_206_if_valid_credentials_and_2fa_enabled() {
         .await
         .expect("found code");
 
-    assert_eq!(json_body.login_attempt_id, login_attmpt_id.as_ref().expose_secret());
+    assert_eq!(
+        json_body.login_attempt_id,
+        login_attmpt_id.as_ref().expose_secret()
+    );
 }

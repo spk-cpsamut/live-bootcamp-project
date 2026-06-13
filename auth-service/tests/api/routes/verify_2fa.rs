@@ -1,8 +1,13 @@
 use auth_service::{
     domain::{Email, LoginAttemptId, TwoFACode},
-    routes::TwoFactorAuthResponse, utils::constants::JWT_COOKIE_NAME,
+    routes::TwoFactorAuthResponse,
+    utils::constants::JWT_COOKIE_NAME,
 };
 use secrecy::ExposeSecret;
+use wiremock::{
+    matchers::{method, path},
+    Mock, ResponseTemplate,
+};
 
 use crate::helper::{get_random_email, TestApp};
 
@@ -86,12 +91,20 @@ async fn should_return_401_if_old_code() {
 
     assert_eq!(response.status().as_u16(), 201);
 
+
     // First login call
 
     let login_body = serde_json::json!({
         "email": random_email,
         "password": "password123"
     });
+
+    Mock::given(path("/email"))
+    .and(method("POST"))
+    .respond_with(ResponseTemplate::new(200))
+    .expect(2)
+    .mount(&app.email_server)
+    .await;
 
     let response = app.login(&login_body).await;
 
@@ -159,15 +172,15 @@ async fn should_return_200_if_correct_code() {
     assert_eq!(res.status().as_u16(), 200);
 
     let auth_cookie = res
-    .cookies()
-    .find(|cookie| cookie.name() == JWT_COOKIE_NAME)
-    .expect("No auth cookie found");
+        .cookies()
+        .find(|cookie| cookie.name() == JWT_COOKIE_NAME)
+        .expect("No auth cookie found");
 
-assert!(!auth_cookie.value().is_empty());
+    assert!(!auth_cookie.value().is_empty());
 }
 
 #[tokio::test]
-async fn should_return_401_if_same_code_twice() {    
+async fn should_return_401_if_same_code_twice() {
     let app = TestApp::new().await;
 
     let email = Email::parse("test5@gmail.com".to_owned().into()).expect("valid email");
@@ -182,7 +195,7 @@ async fn should_return_401_if_same_code_twice() {
         .await
         .expect("add code successfully");
 
-        let body = serde_json::json!({"email": email.as_ref().to_owned().expose_secret(), "loginAttemptId": login_attempt_id.as_ref().expose_secret(), "2FACode": code.as_ref().expose_secret()});
+    let body = serde_json::json!({"email": email.as_ref().to_owned().expose_secret(), "loginAttemptId": login_attempt_id.as_ref().expose_secret(), "2FACode": code.as_ref().expose_secret()});
 
     let res = app.verify_2fa(&body).await;
 
